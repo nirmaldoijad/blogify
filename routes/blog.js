@@ -1,5 +1,6 @@
 const {Router} = require("express");
 const multer = require('multer');
+const { put } = require('@vercel/blob');
 const path = require('path');
 
 const Blog = require('../models/blog');
@@ -7,15 +8,7 @@ const Comment = require('../models/comment');
 
 const router = Router();
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.resolve(`./public/uploads/`))
-  },
-  filename: function (req, file, cb) {
-    const fileName = `${Date.now()}-${file.originalname}`;
-    cb(null, fileName)
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({ storage: storage })
 
@@ -44,16 +37,29 @@ router.post('/comment/:blogId', async (req, res) =>{
     return res.redirect(`/blog/${req.params.blogId}`)
 })
 
-router.post("/", upload.single('coverImage'), async (req, res) =>{
-    const {title, body} = req.body;
-    const blog = await Blog.create({
-        body,
-        title,
-        createdBy: req.user._id,
-        coverImageURL: `/uploads/${req.file.filename}`,
-    })
-    return res.redirect(`/blog/${blog._id}`);
-})
+router.post("/", upload.single('coverImage'), async (req, res) => {
+    const { title, body } = req.body;
+
+    try {
+        // 1. Upload the file buffer to Vercel Blob
+        const blob = await put(req.file.originalname, req.file.buffer, {
+            access: 'public',
+        });
+
+        // 2. Use the new blob.url for your database
+        const blog = await Blog.create({
+            body,
+            title,
+            createdBy: req.user._id,
+            coverImageURL: blob.url, // Save the cloud link, not the local path
+        });
+
+        return res.redirect(`/blog/${blog._id}`);
+    } catch (error) {
+        console.error("Blob Upload Error:", error);
+        return res.status(500).send("Internal Server Error during upload");
+    }
+});
 
 module.exports = router;
 
