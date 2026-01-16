@@ -4,7 +4,9 @@ const secret = '$uperman@123';
 
 function createTokenForUser(user) {
   const payload = {
-    id: user._id
+    id: user._id,
+    email:user.email,
+    fullName: user.fullName,
   };
 
   return JWT.sign(payload, secret, {
